@@ -1,0 +1,6 @@
+model:
+  d_ff: 1024
+runtime:
+  log_dir: "work/logs_abla_dff1024"
+  ckpt_dir: "work/ckpts_abla_dff1024"
+  tb_dir: "work/tb_abla_dff1024"

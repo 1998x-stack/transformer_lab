@@ -1,0 +1,25 @@
+model:
+  N: 6
+  d_model: 1024
+  d_ff: 4096
+  num_heads: 16
+  dropout: 0.1   # 论文对 En→Fr Big 提示可用更小 dropout
+  activation: "relu"
+  pos_encoding: "sinusoidal"
+  label_smoothing: 0.1
+  vocab_size: 32000
+
+data:
+  dataset: "wmt14"
+  lang_pair: "en-fr"
+  tokenizer_dir: "work/tokenizer_en_fr"
+  vocab_size: 32000
+
+optim:
+  warmup_steps: 4000
+  max_steps: 300000
+
+runtime:
+  log_dir: "work/logs_en_fr_big"
+  ckpt_dir: "work/checkpoints_en_fr_big"
+  tb_dir: "work/tb_en_fr_big"

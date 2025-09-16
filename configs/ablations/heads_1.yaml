@@ -1,0 +1,6 @@
+model:
+  num_heads: 1
+runtime:
+  log_dir: "work/logs_abla_heads1"
+  ckpt_dir: "work/ckpts_abla_heads1"
+  tb_dir: "work/tb_abla_heads1"

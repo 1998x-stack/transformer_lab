@@ -1,0 +1,6 @@
+model:
+  pos_encoding: "learned"
+runtime:
+  log_dir: "work/logs_abla_poslearned"
+  ckpt_dir: "work/ckpts_abla_poslearned"
+  tb_dir: "work/tb_abla_poslearned"
