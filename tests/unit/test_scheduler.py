@@ -1,6 +1,7 @@
-import pytest
-import torch
 import math
+
+import torch
+
 from optim.scheduler import NoamScheduler
 
 

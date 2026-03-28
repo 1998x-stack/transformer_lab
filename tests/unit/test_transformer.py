@@ -1,8 +1,6 @@
-import pytest
 import torch
-import torch.nn as nn
-import math
-from models.transformer import PositionalEncoding, MultiHeadAttention, Transformer
+
+from models.transformer import MultiHeadAttention, PositionalEncoding, Transformer
 
 
 class TestPositionalEncoding:

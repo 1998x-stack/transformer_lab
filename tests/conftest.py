@@ -1,16 +1,17 @@
+import tempfile
+from pathlib import Path
+
 import pytest
 import torch
-import tempfile
-import shutil
-from pathlib import Path
+
+from models.transformer import Transformer
 from utils.config import (
-    TrainConfig,
-    ModelConfig,
     DataConfig,
+    ModelConfig,
     OptimConfig,
     RuntimeConfig,
+    TrainConfig,
 )
-from models.transformer import Transformer
 
 
 @pytest.fixture

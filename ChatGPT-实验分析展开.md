@@ -1,10 +1,10 @@
 # 实验分析展开
 
-**User:** Anonymous (harbertparker90526@outlook.com)  
-**Created:** 9/16/2025 17:15:34  
-**Updated:** 9/16/2025 17:36:59  
-**Exported:** 9/16/2025 17:37:11  
-**Link:** [https://chatgpt.com/g/g-p-68c390f088dc81918596271e1836757f-deepsearch/c/68c92ab4-2db8-8329-9f43-302846622229](https://chatgpt.com/g/g-p-68c390f088dc81918596271e1836757f-deepsearch/c/68c92ab4-2db8-8329-9f43-302846622229)  
+**User:** Anonymous (harbertparker90526@outlook.com)
+**Created:** 9/16/2025 17:15:34
+**Updated:** 9/16/2025 17:36:59
+**Exported:** 9/16/2025 17:37:11
+**Link:** [https://chatgpt.com/g/g-p-68c390f088dc81918596271e1836757f-deepsearch/c/68c92ab4-2db8-8329-9f43-302846622229](https://chatgpt.com/g/g-p-68c390f088dc81918596271e1836757f-deepsearch/c/68c92ab4-2db8-8329-9f43-302846622229)
 
 ## Prompt:
 2025-09-16 17:15:31
@@ -50,7 +50,7 @@ PDF
 
 **WMT14 英↔德（≈4.5M 句对）**采用 BPE，源/目标共享词表约 **37k**；**WMT14 英↔法（≈36M 句对）**采用 **32k** word-piece 词表（引用 GNMT 的设定）。句对按**近似长度**分桶后成批；每个 batch 目标是**约 25k 源词 + 25k 目标词**（token 级）。这些细节在 PDF 的“5.1 Training Data and Batching”小节有完整描述。
 
-**复现要点**：  
+**复现要点**：
 1）共享子词词表对齐源/目标空间，简化词嵌入矩阵；2）按长度分桶可显著提升吞吐；3）“25k+25k token/batch”是**按词片计**，不是按句数计，工程实现需用**动态 batch**或**accumulate**到该规模。
 
 * * *
@@ -60,7 +60,7 @@ PDF
 
 实验在**单机 8×NVIDIA P100**上进行。Base 模型单步约 **0.4 s**，总 **100k** 步（≈12h）；Big 模型单步 **1.0 s**，总 **300k** 步（≈3.5 天）。这也对应了文中“En-De SOTA 的 Transformer-big 3.5 天/8×P100”这一说法。
 
-**复现要点**：  
+**复现要点**：
 确保数据管线与分桶策略足够快，否则很难达到论文报告的 step time。
 
 * * *
@@ -76,7 +76,7 @@ $$
 
 其中 **warmup\_steps=4000**（先线性升温，再按  $1/\sqrt{\text{step}}$  衰减）。
 
-**复现要点**：  
+**复现要点**：
 1）用 **d\_model** 缩放学习率是关键；2）warmup=4000 对 Base/Big 均适用，是提升稳定性与早期收敛的核心技巧。
 
 * * *
@@ -84,10 +84,10 @@ $$
 正则化与标签平滑（Regularization & Label Smoothing）
 ==========================================
 
-**残差 Dropout**：在每个子层输出处（加入残差与 LayerNorm 之前）施加 dropout；此外还对**词嵌入与位置编码之和**施加 dropout。**Base** 的 **Pdrop=0.1**。  
+**残差 Dropout**：在每个子层输出处（加入残差与 LayerNorm 之前）施加 dropout；此外还对**词嵌入与位置编码之和**施加 dropout。**Base** 的 **Pdrop=0.1**。
 **标签平滑**：采用 **ε\_ls=0.1**；会**增大**困惑度（模型更不“自信”）但能**提高准确率与 BLEU**。
 
-**复现要点**：  
+**复现要点**：
 Dropout 的**施加位置**与幅度要与论文一致；Label smoothing 用在**训练损失**处，推断不变。
 
 * * *
@@ -95,10 +95,10 @@ Dropout 的**施加位置**与幅度要与论文一致；Label smoothing 用在*
 解码策略与检查点平均（Decoding & Checkpoint Averaging）
 ===========================================
 
-**Beam search**：beam size=**4**，**length penalty α=0.6**（在 dev 上选定）；解码最大长度设为“**输入长度+50**”，并使用**早停**。  
+**Beam search**：beam size=**4**，**length penalty α=0.6**（在 dev 上选定）；解码最大长度设为“**输入长度+50**”，并使用**早停**。
 **Checkpoint Averaging**：Base 取最近 **5** 个（每 10 分钟保存一次）平均；Big 取最近 **20** 个平均（实证能带来稳定收益）。
 
-**复现要点**：  
+**复现要点**：
 在同等模型下，**beam=4/α=0.6**几乎是“论文默认”；平均权重能显著稳定 BLEU。
 
 * * *
@@ -106,7 +106,7 @@ Dropout 的**施加位置**与幅度要与论文一致；Label smoothing 用在*
 主结果（Table 2）：质量-成本双优
 ====================
 
-Table 2 汇总了与当时代表性模型的对比。**Transformer-base**在 En-De/En-Fr 的 BLEU 分别为 **27.3 / 38.1**，对应的训练成本估算为 **3.3×10¹⁸ FLOPs**；**Transformer-big** 达到 **28.4 / 41.8**，成本 **2.3×10¹⁹ FLOPs**。作者强调其在**质量**与**训练开销**上均优于当时 SOTA（含 ensemble）。  
+Table 2 汇总了与当时代表性模型的对比。**Transformer-base**在 En-De/En-Fr 的 BLEU 分别为 **27.3 / 38.1**，对应的训练成本估算为 **3.3×10¹⁸ FLOPs**；**Transformer-big** 达到 **28.4 / 41.8**，成本 **2.3×10¹⁹ FLOPs**。作者强调其在**质量**与**训练开销**上均优于当时 SOTA（含 ensemble）。
 需要注意，正文一处对 En→Fr 的描述写作 **41.0**，而表中给出 **41.8**；以 Table 2 为准（论文常见的排版/版本差异）。
 
 **训练成本估算方法**：训练时间 × GPU 数 × 单卡持续 TFLOPS（示例：K80=2.8、K40=3.7、M40=6.0、P100=9.5 TFLOPS）。
@@ -118,19 +118,19 @@ Table 2 汇总了与当时代表性模型的对比。**Transformer-base**在 En-
 
 消融一律在 **En→De dev（newstest2013）**上评估，**使用 beam search**，但**不做 checkpoint averaging**，从而更敏感地观察结构/超参变化的直接影响。Base 配置为 **N=6, d\_model=512, d\_ff=2048, h=8, d\_k=d\_v=64, P\_drop=0.1, ε\_ls=0.1, 训练 100k steps**（表头与 base 行给出）。
 
-**(A) 注意力头数 h 与 d\_k/d\_v 的配比**  
+**(A) 注意力头数 h 与 d\_k/d\_v 的配比**
 在保持计算量恒定（Section 3.2.2 的分头降维策略）前提下，**h=1** 相比最佳设置差 **0.9 BLEU**；**头数过多**也会劣化，存在“过分切分导致平均/稀释”的效应。这是 **Multi-Head** 设计必要性的直接实证。
 
-**(B) 降低 d\_k 会伤害质量**  
+**(B) 降低 d\_k 会伤害质量**
 降低**键向量维度 d\_k**显著降低 BLEU，提示“**兼容性函数（query–key）并不易学**”，简单点积之外更复杂的方案值得探索。
 
-**(C) 与 (D) 扩大模型（d\_model / d\_ff）与 Dropout 的作用**  
+**(C) 与 (D) 扩大模型（d\_model / d\_ff）与 Dropout 的作用**
 更大的 **d\_model / d\_ff** 带来更好困惑度与 BLEU（“bigger is better”），**Dropout 非常关键**以避免过拟合。表中典型对比如 **d\_ff: 1024→4096** 的 BLEU 提升与 **P\_drop: 0→0.2** 的明显增益。
 
-**(E) 位置编码：正弦 vs 可学习**  
+**(E) 位置编码：正弦 vs 可学习**
 把**正弦位置编码**替换为**可学习嵌入**，结果**几乎相同**（dev BLEU 25.7 vs base 25.8），说明\*\*“必须有位置信息”**远比**“采用何种形式”\*\*更重要。你上传的 md 讲义也据此给出同样结论与学习提示。
 
-**Big 配置**  
+**Big 配置**
 表末给出 big：**N=6, d\_model=1024, d\_ff=4096, h=16, P\_drop=0.3, 训练 300k steps**，在 dev 上 PPL/BLEU 分别 **4.33/26.4**，参数量约 **213M**。
 
 * * *
@@ -145,10 +145,10 @@ Table 2 汇总了与当时代表性模型的对比。**Transformer-base**在 En-
 评价协议与实现细节补充
 ===========
 
-**开发/测试集**：消融在 **newstest2013（dev）**，主结果在 **newstest2014（test）** 上报告。  
-**度量**：BLEU；dev 上还报告 **per-wordpiece PPL**（与 per-word 不可直接比对）。  
-**推断上限**：max output length = input length + 50，配合早停。  
-**dropout 率在 En→Fr big**：文本中特别提示把 **P\_drop** 调为 **0.1（非 0.3）**，以获得更优 BLEU。  
+**开发/测试集**：消融在 **newstest2013（dev）**，主结果在 **newstest2014（test）** 上报告。
+**度量**：BLEU；dev 上还报告 **per-wordpiece PPL**（与 per-word 不可直接比对）。
+**推断上限**：max output length = input length + 50，配合早停。
+**dropout 率在 En→Fr big**：文本中特别提示把 **P\_drop** 调为 **0.1（非 0.3）**，以获得更优 BLEU。
 **训练成本口径**：用“持续 TFLOPS × GPU 数 × 时间”粗估 FLOPs，给各 GPU 型号的标称常数，利于横向效率比较。
 
 * * *
@@ -156,12 +156,12 @@ Table 2 汇总了与当时代表性模型的对比。**Transformer-base**在 En-
 结果解读与实践要点（结合论文 + 你的 md 笔记）
 ==========================
 
-1）**多头注意力的“恰当”头数**：h=8 与  $d_k=d_v=d_{model}/h$  的搭配在**质量-计算**间性价比最高；头数太少表达力不足，太多会稀释表示。  
-2）**大模型更强，但要配强正则**：扩大 **d\_model/d\_ff** 与**训练步数**（big: 300k）一致提升，但需更高 **dropout** 与更长期训练以避免过拟合。  
-3）**位置编码形式不敏感**：正弦与可学习几乎等价，工程上更关注**数值稳定性**与**实现简洁**即可。  
-4）**Label smoothing=0.1** 是提升 BLEU 的**硬性技巧**，即使 PPL 变差也不要误判为退步。  
-5）**解码与权重平均**：小 beam（=4）+ 合理 length penalty（0.6）+ checkpoint averaging 是**性价比最高**的公开配方。  
-6）**吞吐与 batch 口径**：围绕“25k+25k token/batch”的**动态 token batching**是到达论文速度与稳定性的关键基础设施。  
+1）**多头注意力的“恰当”头数**：h=8 与  $d_k=d_v=d_{model}/h$  的搭配在**质量-计算**间性价比最高；头数太少表达力不足，太多会稀释表示。
+2）**大模型更强，但要配强正则**：扩大 **d\_model/d\_ff** 与**训练步数**（big: 300k）一致提升，但需更高 **dropout** 与更长期训练以避免过拟合。
+3）**位置编码形式不敏感**：正弦与可学习几乎等价，工程上更关注**数值稳定性**与**实现简洁**即可。
+4）**Label smoothing=0.1** 是提升 BLEU 的**硬性技巧**，即使 PPL 变差也不要误判为退步。
+5）**解码与权重平均**：小 beam（=4）+ 合理 length penalty（0.6）+ checkpoint averaging 是**性价比最高**的公开配方。
+6）**吞吐与 batch 口径**：围绕“25k+25k token/batch”的**动态 token batching**是到达论文速度与稳定性的关键基础设施。
 7）你的 md 教案中也据此总结了“多头必要、模型做大、dropout 必需、位置编码形式不敏感”等要点，便于教学与复现。
 
 * * *
@@ -237,7 +237,7 @@ design code category and give me code file by file
 
 完成
 
-太好了—我直接给你一套**从零实现、可插拔消融、工业化结构**的 Transformer 项目：涵盖数据加载（优先本地、否则 HuggingFace 自动下载）、共享子词分词器训练/加载、动态按 token 配额分桶 batching、Noam 学习率调度、Label Smoothing、Beam Search（α=0.6）、Checkpoint Averaging、SacreBLEU 评测、TensorBoard 与 Loguru 日志、以及全套**Ablation 配置 + Bash 实验脚本**。  
+太好了—我直接给你一套**从零实现、可插拔消融、工业化结构**的 Transformer 项目：涵盖数据加载（优先本地、否则 HuggingFace 自动下载）、共享子词分词器训练/加载、动态按 token 配额分桶 batching、Noam 学习率调度、Label Smoothing、Beam Search（α=0.6）、Checkpoint Averaging、SacreBLEU 评测、TensorBoard 与 Loguru 日志、以及全套**Ablation 配置 + Bash 实验脚本**。
 （代码内含**中英双语注释**、PEP-257 Docstring、Google 风格、typing。）
 
 * * *
@@ -500,7 +500,7 @@ from typing import Optional
 
 class LabelSmoothingLoss(nn.Module):
     """Cross-entropy with label smoothing on logits.
-    
+
     Args:
         classes: vocab size.
         smoothing: epsilon for label smoothing.

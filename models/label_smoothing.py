@@ -6,7 +6,7 @@ from typing import Optional
 
 class LabelSmoothingLoss(nn.Module):
     """Cross-entropy with label smoothing on logits.
-    
+
     Args:
         classes: vocab size.
         smoothing: epsilon for label smoothing.

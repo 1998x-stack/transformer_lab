@@ -1,8 +1,9 @@
-import pytest
 import tempfile
-import yaml
 from pathlib import Path
-from utils.config import load_config, TrainConfig, ModelConfig, DataConfig
+
+import pytest
+
+from utils.config import TrainConfig, load_config
 
 
 class TestConfigLoading:

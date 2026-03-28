@@ -1,8 +1,9 @@
-import pytest
 import math
-import torch
 import time
-from utils.metrics import perplexity, compute_bleu, SpeedMeter, estimate_train_flops
+
+import torch
+
+from utils.metrics import SpeedMeter, compute_bleu, estimate_train_flops, perplexity
 
 
 class TestSpeedMeter:
