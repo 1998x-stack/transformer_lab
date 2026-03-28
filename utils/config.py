@@ -5,7 +5,8 @@ from typing import Optional, List, Literal, Dict, Any
 import yaml
 import os
 
-@dataclass
+
+@dataclass(frozen=True)
 class OptimConfig:
     lr: float = 5e-4
     betas: tuple[float, float] = (0.9, 0.98)
@@ -15,7 +16,8 @@ class OptimConfig:
     max_steps: int = 100_000
     grad_clip: float = 1.0
 
-@dataclass
+
+@dataclass(frozen=True)
 class ModelConfig:
     N: int = 6
     d_model: int = 512
@@ -30,7 +32,8 @@ class ModelConfig:
     label_smoothing: float = 0.1
     vocab_size: int = 37000  # WMT14 En-De 默认约 37k
 
-@dataclass
+
+@dataclass(frozen=True)
 class DataConfig:
     dataset: Literal["wmt14", "wmt16", "opus100", "copy"] = "wmt14"
     lang_pair: Literal["en-de", "de-en", "en-fr", "fr-en"] = "en-de"
@@ -46,7 +49,8 @@ class DataConfig:
     cache_dir: Optional[str] = None
     corpus_path: Optional[str] = None  # used when dataset == "copy"
 
-@dataclass
+
+@dataclass(frozen=True)
 class RuntimeConfig:
     seed: int = 42
     device: str = "cuda"
@@ -60,7 +64,8 @@ class RuntimeConfig:
     amp: bool = True
     accumulate_steps: int = 1
 
-@dataclass
+
+@dataclass(frozen=True)
 class DecodeConfig:
     beam_size: int = 4
     length_penalty: float = 0.6
@@ -68,7 +73,8 @@ class DecodeConfig:
     max_len_ratio: float = 1.0  # max_len = src_len * ratio + offset
     repeat_penalty: float = 0.0  # >0 时抑制 beam search 中已生成 token 重复
 
-@dataclass
+
+@dataclass(frozen=True)
 class TrainConfig:
     model: ModelConfig = field(default_factory=ModelConfig)
     data: DataConfig = field(default_factory=DataConfig)
@@ -76,16 +82,27 @@ class TrainConfig:
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     decode: DecodeConfig = field(default_factory=DecodeConfig)
 
+
 def load_config(path: str) -> TrainConfig:
     """Load YAML to dataclasses config."""
     with open(path, "r", encoding="utf-8") as f:
-        cfg_dict = yaml.safe_load(f)
-    # 合并 vocab 大小：若在 data 指定，覆盖 model.vocab_size
-    model_cfg = ModelConfig(**cfg_dict.get("model", {}))
-    data_cfg = DataConfig(**cfg_dict.get("data", {}))
-    if data_cfg.vocab_size:
-        model_cfg.vocab_size = data_cfg.vocab_size
+        cfg_dict = yaml.safe_load(f) or {}
+
+    model_dict = cfg_dict.get("model", {})
+    data_dict = cfg_dict.get("data", {})
+
+    if data_dict.get("vocab_size"):
+        model_dict["vocab_size"] = data_dict["vocab_size"]
+
+    model_cfg = ModelConfig(**model_dict)
+    data_cfg = DataConfig(**data_dict)
     optim_cfg = OptimConfig(**cfg_dict.get("optim", {}))
     runtime_cfg = RuntimeConfig(**cfg_dict.get("runtime", {}))
     decode_cfg = DecodeConfig(**cfg_dict.get("decode", {}))
-    return TrainConfig(model=model_cfg, data=data_cfg, optim=optim_cfg, runtime=runtime_cfg, decode=decode_cfg)
+    return TrainConfig(
+        model=model_cfg,
+        data=data_cfg,
+        optim=optim_cfg,
+        runtime=runtime_cfg,
+        decode=decode_cfg,
+    )
