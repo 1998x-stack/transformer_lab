@@ -19,7 +19,8 @@ def length_penalty(len_y: int, alpha: float) -> float:
 @torch.no_grad()
 def beam_search(model: Transformer, src_ids: torch.Tensor, src_pad_id: int,
                 bos_id: int, eos_id: int, beam: int = 4, alpha: float = 0.6,
-                max_len_ratio: float = 1.0, max_len_offset: int = 50) -> List[List[int]]:
+                max_len_ratio: float = 1.0, max_len_offset: int = 50,
+                repeat_penalty: float = 0.0) -> List[List[int]]:
     device = src_ids.device
     B, S = src_ids.shape
     src_mask = create_padding_mask(src_ids, src_pad_id)
@@ -47,6 +48,10 @@ def beam_search(model: Transformer, src_ids: torch.Tensor, src_pad_id: int,
                 dec = model.decode(tgt, mem_b, tgt_mask, src_mask_b)
                 logits = model.generator(dec[:, -1, :])  # 最后一步
                 logprobs = torch.log_softmax(logits, dim=-1).squeeze(0)
+                if repeat_penalty > 0 and h.tokens:
+                    # 抑制已生成 token 重复出现，缓解子词/整句退化
+                    logprobs = logprobs.clone()
+                    logprobs[list(set(h.tokens))] -= repeat_penalty
                 topk_logprob, topk_idx = torch.topk(logprobs, beam)
                 for lp, idx in zip(topk_logprob.tolist(), topk_idx.tolist()):
                     new_tokens = h.tokens + [idx]

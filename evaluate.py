@@ -56,7 +56,8 @@ def main():
         hyp_ids = beam_search(
             model, src_ids, tok.pad_id, tok.bos_id, tok.eos_id,
             beam=cfg.decode.beam_size, alpha=cfg.decode.length_penalty,
-            max_len_ratio=cfg.decode.max_len_ratio, max_len_offset=cfg.decode.max_len_offset
+            max_len_ratio=cfg.decode.max_len_ratio, max_len_offset=cfg.decode.max_len_offset,
+            repeat_penalty=cfg.decode.repeat_penalty
         )[0]
         hyp = tok.decode(hyp_ids)
         refs.append(ref)

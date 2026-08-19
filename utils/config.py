@@ -66,6 +66,7 @@ class DecodeConfig:
     length_penalty: float = 0.6
     max_len_offset: int = 50
     max_len_ratio: float = 1.0  # max_len = src_len * ratio + offset
+    repeat_penalty: float = 0.0  # >0 时抑制 beam search 中已生成 token 重复
 
 @dataclass
 class TrainConfig:
