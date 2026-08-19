@@ -34,7 +34,7 @@ optim:
   eps: 1.0e-9
   weight_decay: 0.0
   warmup_steps: 400
-  max_steps: 3000
+  max_steps: 15000
   grad_clip: 1.0
 
 runtime:
