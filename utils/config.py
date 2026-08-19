@@ -32,7 +32,7 @@ class ModelConfig:
 
 @dataclass
 class DataConfig:
-    dataset: Literal["wmt14", "wmt16", "opus100"] = "wmt14"
+    dataset: Literal["wmt14", "wmt16", "opus100", "copy"] = "wmt14"
     lang_pair: Literal["en-de", "de-en", "en-fr", "fr-en"] = "en-de"
     max_src_len: int = 256
     max_tgt_len: int = 256
@@ -44,6 +44,7 @@ class DataConfig:
     max_tokens_per_batch: int = 50_000
     num_buckets: int = 8
     cache_dir: Optional[str] = None
+    corpus_path: Optional[str] = None  # used when dataset == "copy"
 
 @dataclass
 class RuntimeConfig:
