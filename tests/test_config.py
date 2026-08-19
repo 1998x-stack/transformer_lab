@@ -12,5 +12,5 @@ def test_load_copy_config():
     cfg = load_config("configs/copy_en_en.yaml")
     assert cfg.data.dataset == "copy"
     assert cfg.data.corpus_path == "sample_corpus.txt"
-    assert cfg.model.N == 6
-    assert cfg.optim.max_steps == 6000
+    assert cfg.model.N == 2
+    assert cfg.optim.max_steps == 3000

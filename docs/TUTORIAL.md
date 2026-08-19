@@ -13,11 +13,13 @@ Fairy Tales) without needing parallel translation data.
 - `data/corpus.py` reads the text file, drops blank lines / ALL-CAPS headings /
   over-short or over-long lines, and makes `{"src": line, "tgt": line}` records.
 - A SentencePiece (BPE, shared vocab ~4k) tokenizer is built from the train split.
-- The standard base Transformer (N=6, d_model=512, d_ff=2048, 8 heads) trains with
-  the Noam schedule and label smoothing 0.0.
+- The compact demo model (N=2, d_model=128, d_ff=512, 4 heads) trains with the
+  Noam schedule and label smoothing 0.0 — fast enough (~10–20 min) on a laptop CPU.
+  Pipe to a base N=6/d_model=512 model on real hardware when you scale up.
 - Device is resolved at runtime (`cuda` → `mps` → `cpu`) with graceful fallback.
-  `runtime.device` in the YAML picks the backend; set it to `"cpu"` or `"mps"` as
-  needed. AMP is only used on CUDA.
+  `runtime.device` in the YAML picks the backend; `configs/copy_en_en.yaml` uses
+  `cpu` because it is 3–4x faster than this machine's MPS for this model.
+  AMP is only used on CUDA.
 
 ## 2. Setup
 
@@ -43,8 +45,9 @@ What happens:
   (best validation loss).
 - Logs / tensorbboard under `work/logs_en_en` / `work/tb_en_en`.
 
-`max_steps` in the config bounds the run; a few thousand steps on MPS/CPU is enough
-to see the copy task converge toward low perplexity.
+`max_steps` in the config bounds the run; 3000 steps with the compact model takes
+about 10–20 minutes on CPU and is enough to see the copy task converge toward low
+perplexity.
 
 ## 4. Test / echo
 
