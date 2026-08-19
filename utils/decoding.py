@@ -4,8 +4,8 @@ from dataclasses import dataclass
 import math
 from typing import List, Tuple
 import torch
-from ..models.transformer import Transformer
-from .torch_utils import create_padding_mask
+from models.transformer import Transformer
+from utils.torch_utils import create_padding_mask
 
 @dataclass
 class BeamHypo:
