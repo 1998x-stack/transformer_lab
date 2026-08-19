@@ -32,6 +32,27 @@ bash scripts/run_base_en_de.sh
 bash scripts/ablation_heads1.sh
 ```
 
+## 🧪 在本地英文语料上训练（copy/echo 演示）
+
+`sample_corpus.txt`（格林童话，英文单语文本）不是平行句对，因此这里把任务建模为
+**copy / echo**：编码器和解码器输入同一句话（`src == tgt`），模型学会重现输入。
+训练后用 `decode.py` 输入任意句子，检查它能否被“复述”回来。
+
+```bash
+python -m pip install -r requirements.txt
+bash scripts/run_copy_en_en.sh   # 安装依赖 → 训练 → 示例回声测试
+```
+
+完整教程见 [`docs/TUTORIAL.md`](docs/TUTORIAL.md)。
+
+## 🖥️ 硬件与设备
+
+- 训练 / 解码 / 评估在**运行时自动解析设备**：优先 CUDA，其次 MPS（Apple Silicon），
+  最后 CPU，并在请求的后端不可用时安全回退。
+- 通过各 YAML 配置的 `runtime.device`（`cuda` / `mps` / `cpu`）自行指定设备。
+- AMP（混合精度）仅在 CUDA 上启用；MPS / CPU 以 fp32 运行。
+- 除 `copy` 模式外，原有 En→De / En→Fr 机器翻译路径保持不变。
+
 ## 📄 License
 
 MIT
