@@ -58,8 +58,10 @@ python3 decode.py --config configs/copy_en_en.yaml \
 ```
 
 The output should closely reproduce the input sentence (beam search, size 4,
-length penalty 0.6). Minor differences on unseen phrasing are expected early in
-training.
+length penalty 0.6, plus a repeat penalty). With the compact laptop model, corpus-like
+sentences are echoed accurately; novel/unseen phrasing is reproduced only
+approximately (correct words, imperfect word order), which is the expected
+limitation of a small model trained briefly on CPU.
 
 ## 5. Evaluate (BLEU of reconstruction)
 

@@ -11,11 +11,11 @@ echo ">> Installing dependencies (if needed)"
 echo ">> Training copy/echo model on sample_corpus.txt..."
 "$PY" train.py --config configs/copy_en_en.yaml
 
-echo ">> Echo demo (expected: model reproduces the input sentence)"
+echo ">> Echo demo (model reproduces input; cleanest on corpus-like sentences, approximate on novel phrasing)"
 examples=(
-  "There was once a poor man who lived in the forest."
-  "The king had a beautiful daughter with long golden hair."
-  "In the morning the little bird began to sing very sweetly."
+  "Of all the ladies in the land,"
+  "Alas! alas! if thy mother knew it,"
+  "And took my bones that they might lie"
 )
 for s in "${examples[@]}"; do
   echo "in : $s"
