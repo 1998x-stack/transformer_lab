@@ -1,8 +1,35 @@
 # transformer_lab/data/datasets.py
 from __future__ import annotations
 from typing import Dict, Tuple, Iterable, List
-from datasets import load_dataset, load_from_disk, DatasetDict
+from datasets import load_dataset, load_from_disk, Dataset, DatasetDict
+from data.corpus import parse_copy_corpus
 import os
+import random
+
+
+def load_copy_corpus(
+    corpus_path: str,
+    min_len: int,
+    max_len: int,
+    seed: int = 42,
+    val_ratio: float = 0.05,
+    test_ratio: float = 0.05,
+) -> DatasetDict:
+    """Build a train/validation/test copy corpus (src == tgt) from a plain-text file."""
+    records = parse_copy_corpus(corpus_path, min_len, max_len)
+    rng = random.Random(seed)
+    rng.shuffle(records)
+    n = len(records)
+    n_test = max(1, int(n * test_ratio))
+    n_val = max(1, int(n * val_ratio))
+    test = records[:n_test]
+    val = records[n_test : n_test + n_val]
+    train = records[n_test + n_val :]
+    return DatasetDict({
+        "train": Dataset.from_list(train),
+        "validation": Dataset.from_list(val),
+        "test": Dataset.from_list(test),
+    })
 
 def load_mt_dataset(dataset: str, lang_pair: str, cache_dir: str | None = None) -> DatasetDict:
     """Load translation dataset; try local path then web."""
