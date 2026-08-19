@@ -13,12 +13,12 @@ from tqdm import tqdm
 from utils.config import load_config, TrainConfig
 from utils.logging_utils import setup_logging
 from utils.distributed import set_seed, is_main_process
-from utils.torch_utils import create_padding_mask, count_parameters
+from utils.torch_utils import create_padding_mask, count_parameters, resolve_device
 from utils.metrics import SpeedMeter, perplexity
 from optim.scheduler import NoamScheduler
 from models.transformer import Transformer
 from models.label_smoothing import LabelSmoothingLoss
-from data.datasets import load_mt_dataset, filter_and_rename
+from data.datasets import load_mt_dataset, filter_and_rename, load_copy_corpus
 from data.tokenization import train_or_load_spm, SPTokenizer
 from data.collate import DynamicBatcher, collate
 
@@ -28,12 +28,20 @@ def train_loop(cfg: TrainConfig):
 
     # 语言对解析
     src_lang, tgt_lang = cfg.data.lang_pair.split("-")
-    # 加载数据
-    ddict: DatasetDict = load_mt_dataset(cfg.data.dataset, cfg.data.lang_pair, cfg.data.cache_dir)
-    ddict = filter_and_rename(ddict, src_lang, tgt_lang, cfg.data.min_len, cfg.data.max_src_len, cfg.data.max_tgt_len)
+    # 数据：支持本地 copy 语料 (src==tgt) 与 HF 平行语料两种模式
+    if cfg.data.dataset == "copy":
+        ddict: DatasetDict = load_copy_corpus(cfg.data.corpus_path, cfg.data.min_len, cfg.data.max_src_len, seed=cfg.runtime.seed)
+    else:
+        # 加载数据
+        ddict: DatasetDict = load_mt_dataset(cfg.data.dataset, cfg.data.lang_pair, cfg.data.cache_dir)
+        ddict = filter_and_rename(ddict, src_lang, tgt_lang, cfg.data.min_len, cfg.data.max_src_len, cfg.data.max_tgt_len)
 
     tok: SPTokenizer = train_or_load_spm(ddict["train"], cfg.data.tokenizer_dir, cfg.data.vocab_size)
     pad_id, bos_id, eos_id = tok.pad_id, tok.bos_id, tok.eos_id
+
+    device = resolve_device(cfg.runtime.device)
+    use_amp = cfg.runtime.amp and device.type == "cuda"
+    logger.info(f"Training on device={device} amp={use_amp}")
 
     # 模型
     model = Transformer(
@@ -48,7 +56,7 @@ def train_loop(cfg: TrainConfig):
         share_embeddings=cfg.model.share_embeddings,
         tie_softmax_weight=cfg.model.tie_softmax_weight,
         pos_encoding=cfg.model.pos_encoding
-    ).to(cfg.runtime.device)
+    ).to(device)
 
     logger.info(f"Model params: {count_parameters(model):,}")
 
@@ -56,7 +64,7 @@ def train_loop(cfg: TrainConfig):
     sched = NoamScheduler(opt, d_model=cfg.model.d_model, warmup_steps=cfg.optim.warmup_steps)
     criterion = LabelSmoothingLoss(classes=tok.vocab_size, smoothing=cfg.model.label_smoothing, ignore_index=pad_id)
 
-    scaler = torch.cuda.amp.GradScaler(enabled=cfg.runtime.amp)
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     speed = SpeedMeter()
 
     # 动态批处理器
@@ -71,14 +79,14 @@ def train_loop(cfg: TrainConfig):
     for epoch in range(10**9):  # 直到达到 max_steps
         for samples in train_iter:
             batch = collate(samples, pad_id)
-            src_ids = batch["src_ids"].to(cfg.runtime.device)
-            tgt_in_ids = batch["tgt_in_ids"].to(cfg.runtime.device)
-            tgt_out_ids = batch["tgt_out_ids"].to(cfg.runtime.device)
+            src_ids = batch["src_ids"].to(device)
+            tgt_in_ids = batch["tgt_in_ids"].to(device)
+            tgt_out_ids = batch["tgt_out_ids"].to(device)
 
             src_mask = create_padding_mask(src_ids, pad_id)
             tgt_mask = create_padding_mask(tgt_in_ids, pad_id)
 
-            with torch.cuda.amp.autocast(enabled=cfg.runtime.amp):
+            with torch.cuda.amp.autocast(enabled=use_amp):
                 logits = model(src_ids, tgt_in_ids, src_mask, tgt_mask)  # (B,T,V)
                 loss = criterion(logits, tgt_out_ids)
 
@@ -121,9 +129,9 @@ def train_loop(cfg: TrainConfig):
                     n_batch, tot_loss = 0, 0.0
                     for samples in dev_iter:
                         batch = collate(samples[:16], pad_id)  # 小批
-                        src_ids = batch["src_ids"].to(cfg.runtime.device)
-                        tgt_in_ids = batch["tgt_in_ids"].to(cfg.runtime.device)
-                        tgt_out_ids = batch["tgt_out_ids"].to(cfg.runtime.device)
+                        src_ids = batch["src_ids"].to(device)
+                        tgt_in_ids = batch["tgt_in_ids"].to(device)
+                        tgt_out_ids = batch["tgt_out_ids"].to(device)
                         src_mask = src_ids.ne(pad_id)
                         tgt_mask = tgt_in_ids.ne(pad_id)
                         logits = model(src_ids, tgt_in_ids, src_mask, tgt_mask)
