@@ -1,27 +1,46 @@
-# Python
+# Python bytecode / packaging
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
 *.egg-info/
+*.egg
+.eggs/
 build/
 dist/
-.pytest_cache/
-.ruff_cache/
-.tox/
-.coverage
-htmlcov/
 
-# Virtual environments
+# Virtual environments and secrets
 .venv/
 venv/
 env/
 ENV/
+.env
+.env.*
+!.env.example
+
+# Tests, coverage, linters, and type checkers
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.dmypy.json
+dmypy.json
 
 # IDE / OS
 .idea/
 .vscode/
 .DS_Store
+Thumbs.db
 *.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
 
 # Local corpus / data
 sample_corpus.txt
@@ -29,7 +48,7 @@ data/
 dataset/
 datasets/
 
-# Training workspace (checkpoints, tensorboard, tokenizer outputs)
+# Training and experiment outputs
 work/
 checkpoints*/
 runs*/
@@ -39,7 +58,7 @@ output/
 outputs/
 results/
 
-# Model files
+# Model and array artifacts
 *.pth
 *.pt
 *.ckpt
@@ -51,10 +70,9 @@ results/
 *.npy
 *.npz
 
-# Config with sensitive data
+# Local configuration
 config.json
 config.yaml
-.env
 
-# Superpowers / tooling scratch
+# Tooling scratch
 .superpowers/
