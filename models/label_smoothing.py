@@ -17,6 +17,8 @@ class LabelSmoothingLoss(nn.Module):
         assert 0.0 <= smoothing < 1.0
         self.confidence = 1.0 - smoothing
         self.smoothing = smoothing
+        if classes < 2:
+            raise ValueError("classes must be >= 2")
         self.cls = classes
         self.ignore_index = ignore_index
 
@@ -25,9 +27,10 @@ class LabelSmoothingLoss(nn.Module):
         pred = pred.view(-1, pred.size(-1))
         target = target.view(-1)
         mask = target != self.ignore_index
-        if mask.any():
-            target = target[mask]
-            pred = pred[mask]
+        if not mask.any():
+            return pred.sum() * 0.0
+        target = target[mask]
+        pred = pred[mask]
         with torch.no_grad():
             true_dist = torch.zeros_like(pred)
             true_dist.fill_(self.smoothing / (self.cls - 1))
