@@ -68,6 +68,7 @@ class RuntimeConfig:
     tb_dir: str = "work/tensorboard"
     save_every: int = 1000
     eval_every: int = 2000
+    log_every: int = 100
     keep_last: int = 10
     amp: bool = True
     accumulate_steps: int = 1

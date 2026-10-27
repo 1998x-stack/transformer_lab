@@ -64,6 +64,10 @@ def materialize(base: dict, experiment: Experiment, seed: int, output_dir: Path)
         if group not in ("model", "optim") or group not in cfg:
             raise ValueError(f"Unsupported override: {dotted}")
         cfg[group][key] = value
+    # Original Post-LN encoder/decoder has no additional output LayerNorm.
+    # Existing legacy repo defaults to an extra final LayerNorm for compatibility.
+    if experiment.category == "paper":
+        cfg.setdefault("model", {})["final_norm"] = False
     runtime = cfg.setdefault("runtime", {})
     runtime["seed"] = seed
     label = f"{experiment.name}-s{seed}"

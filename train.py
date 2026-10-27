@@ -16,7 +16,9 @@ from utils.distributed import set_seed, is_main_process
 from utils.torch_utils import create_padding_mask, count_parameters, resolve_device
 from utils.metrics import SpeedMeter, perplexity
 from optim.scheduler import NoamScheduler
-from models.transformer import Transformer
+from models.factory import build_model, build_training_components
+from research.tracking import RunRecorder
+import torch.nn.functional as F
 from models.label_smoothing import LabelSmoothingLoss
 from data.datasets import load_mt_dataset, filter_and_rename, load_copy_corpus
 from data.tokenization import train_or_load_spm, SPTokenizer
@@ -44,25 +46,12 @@ def train_loop(cfg: TrainConfig):
     logger.info(f"Training on device={device} amp={use_amp}")
 
     # 模型
-    model = Transformer(
-        vocab_size=tok.vocab_size,
-        N=cfg.model.N,
-        d_model=cfg.model.d_model,
-        d_ff=cfg.model.d_ff,
-        num_heads=cfg.model.num_heads,
-        dropout=cfg.model.dropout,
-        attn_dropout=cfg.model.attn_dropout,
-        activation=cfg.model.activation,
-        share_embeddings=cfg.model.share_embeddings,
-        tie_softmax_weight=cfg.model.tie_softmax_weight,
-        pos_encoding=cfg.model.pos_encoding
-    ).to(device)
+    model = build_model(cfg.model, tok.vocab_size).to(device)
 
     logger.info(f"Model params: {count_parameters(model):,}")
 
-    opt = Adam(model.parameters(), lr=cfg.optim.lr, betas=cfg.optim.betas, eps=cfg.optim.eps, weight_decay=cfg.optim.weight_decay)
-    sched = NoamScheduler(opt, d_model=cfg.model.d_model, warmup_steps=cfg.optim.warmup_steps)
-    criterion = LabelSmoothingLoss(classes=tok.vocab_size, smoothing=cfg.model.label_smoothing, ignore_index=pad_id)
+    opt, sched, criterion = build_training_components(cfg, model, tok.vocab_size, pad_id)
+    recorder = RunRecorder(cfg, count_parameters(model)) if is_main_process() else None
 
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     speed = SpeedMeter()
@@ -71,6 +60,10 @@ def train_loop(cfg: TrainConfig):
     train_iter = DynamicBatcher(ddict["train"], tok, cfg.data.max_tokens_per_batch, cfg.data.num_buckets, shuffle=True)
     global_step = 0
     best_loss = float("inf")
+    micro_steps = 0
+    if cfg.runtime.accumulate_steps < 1:
+        raise ValueError("accumulate_steps must be at least one")
+    opt.zero_grad(set_to_none=True)
     last_ckpts = []
 
     Path(cfg.runtime.ckpt_dir).mkdir(parents=True, exist_ok=True)
@@ -90,7 +83,10 @@ def train_loop(cfg: TrainConfig):
                 logits = model(src_ids, tgt_in_ids, src_mask, tgt_mask)  # (B,T,V)
                 loss = criterion(logits, tgt_out_ids)
 
-            scaler.scale(loss).backward()
+            scaler.scale(loss / cfg.runtime.accumulate_steps).backward()
+            micro_steps += 1
+            if micro_steps % cfg.runtime.accumulate_steps:
+                continue
             if cfg.optim.grad_clip > 0:
                 scaler.unscale_(opt)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.optim.grad_clip)
@@ -104,14 +100,19 @@ def train_loop(cfg: TrainConfig):
             speed.update(tokens)
             global_step += 1
 
-            if is_main_process() and global_step % 100 == 0:
+            if is_main_process() and global_step % cfg.runtime.log_every == 0:
                 lr = sched.get_last_lr()[0]
-                ppl = perplexity(loss.item())
+                nll = F.cross_entropy(logits.detach().reshape(-1, logits.size(-1)),
+                                      tgt_out_ids.reshape(-1), ignore_index=pad_id).item()
+                ppl = math.exp(min(80, nll))
                 tb.add_scalar("train/loss", loss.item(), global_step)
                 tb.add_scalar("train/ppl", ppl, global_step)
+                tb.add_scalar("train/nll", nll, global_step)
                 tb.add_scalar("train/lr", lr, global_step)
                 tb.add_scalar("train/tokens_per_sec", speed.rate(), global_step)
-                logger.info(f"step={global_step} loss={loss.item():.4f} ppl={ppl:.2f} lr={lr:.6f} tok/s={speed.rate():.0f}")
+                recorder.record("train", global_step, loss=loss.item(), nll=nll,
+                                ppl=ppl, lr=lr, tokens_per_sec=speed.rate())
+                logger.info(f"step={global_step} loss={loss.item():.4f} nll={nll:.4f} ppl={ppl:.2f} lr={lr:.6f} tok/s={speed.rate():.0f}")
 
             # 保存与评估
             if is_main_process() and global_step % cfg.runtime.save_every == 0:
@@ -126,7 +127,7 @@ def train_loop(cfg: TrainConfig):
                 model.eval()
                 with torch.no_grad():
                     dev_iter = DynamicBatcher(ddict["validation"], tok, cfg.data.max_tokens_per_batch // 2, cfg.data.num_buckets, shuffle=False)
-                    n_batch, tot_loss = 0, 0.0
+                    n_batch, tot_loss, tot_nll, tot_tokens = 0, 0.0, 0.0, 0
                     for samples in dev_iter:
                         batch = collate(samples[:16], pad_id)  # 小批
                         src_ids = batch["src_ids"].to(device)
@@ -136,22 +137,34 @@ def train_loop(cfg: TrainConfig):
                         tgt_mask = tgt_in_ids.ne(pad_id)
                         logits = model(src_ids, tgt_in_ids, src_mask, tgt_mask)
                         l = criterion(logits, tgt_out_ids).item()
-                        tot_loss += l
+                        valid = int(tgt_out_ids.ne(pad_id).sum().item())
+                        tot_loss += l * valid
+                        tot_nll += F.cross_entropy(logits.reshape(-1, logits.size(-1)),
+                                       tgt_out_ids.reshape(-1), ignore_index=pad_id,
+                                       reduction="sum").item()
+                        tot_tokens += valid
                         n_batch += 1
                         if n_batch >= 10:
                             break
-                    val_loss = tot_loss / max(1, n_batch)
+                    val_loss = tot_loss / max(1, tot_tokens)
+                    val_nll = tot_nll / max(1, tot_tokens)
+                    val_ppl = math.exp(min(80, val_nll))
                 model.train()
                 if is_main_process():
                     tb.add_scalar("val/loss", val_loss, global_step)
-                    tb.add_scalar("val/ppl", math.exp(val_loss), global_step)
-                    logger.info(f"[eval] step={global_step} val_loss={val_loss:.4f} val_ppl={math.exp(val_loss):.2f}")
-                    if val_loss < best_loss:
-                        best_loss = val_loss
+                    tb.add_scalar("val/nll", val_nll, global_step)
+                    tb.add_scalar("val/ppl", val_ppl, global_step)
+                    recorder.record("validation", global_step, loss=val_loss,
+                                    nll=val_nll, ppl=val_ppl, evaluated_tokens=tot_tokens)
+                    logger.info(f"[eval] step={global_step} val_loss={val_loss:.4f} val_nll={val_nll:.4f} val_ppl={val_ppl:.2f}")
+                    if val_nll < best_loss:
+                        best_loss = val_nll
                         torch.save({"model": model.state_dict(), "step": global_step}, f"{cfg.runtime.ckpt_dir}/best.pt")
 
             if global_step >= cfg.optim.max_steps:
                 logger.info("Reached max_steps. Stop.")
+                tb.flush()
+                tb.close()
                 return
 
 def main():
