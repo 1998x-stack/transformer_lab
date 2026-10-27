@@ -50,8 +50,16 @@ class DynamicBatcher:
             random.shuffle(idxs)
         # 分桶
         idxs.sort(key=lambda i: self.lengths[i])
-        buckets = [idxs[i::self.num_buckets] for i in range(self.num_buckets)]
+        # Contiguous length buckets minimize padding; randomize bucket/order
+        # without undoing the grouping. The old strided buckets were almost
+        # deterministically sorted and undermined shuffle=True.
+        chunk_size = max(1, math.ceil(len(idxs) / max(1, self.num_buckets)))
+        buckets = [idxs[i:i + chunk_size] for i in range(0, len(idxs), chunk_size)]
+        if self.shuffle:
+            random.shuffle(buckets)
         for b in buckets:
+            if self.shuffle:
+                random.shuffle(b)
             start = 0
             while start < len(b):
                 batch_idx = []

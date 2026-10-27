@@ -61,6 +61,10 @@ def train_loop(cfg: TrainConfig):
     global_step = 0
     best_loss = float("inf")
     micro_steps = 0
+    accum_target_tokens = 0
+    log_target_tokens = 0
+    log_smoothed_sum = 0.0
+    log_nll_sum = 0.0
     if cfg.runtime.accumulate_steps < 1:
         raise ValueError("accumulate_steps must be at least one")
     opt.zero_grad(set_to_none=True)
@@ -83,36 +87,57 @@ def train_loop(cfg: TrainConfig):
                 logits = model(src_ids, tgt_in_ids, src_mask, tgt_mask)  # (B,T,V)
                 loss = criterion(logits, tgt_out_ids)
 
-            scaler.scale(loss / cfg.runtime.accumulate_steps).backward()
+            # Sum token losses across heterogeneous microbatches before
+            # reducing gradients by the actual non-padding target count.
+            valid = int(tgt_out_ids.ne(pad_id).sum().item())
+            if valid == 0:
+                continue
+            scaler.scale(loss * valid).backward()
+            with torch.no_grad():
+                nll_sum = F.cross_entropy(logits.detach().reshape(-1, logits.size(-1)),
+                                          tgt_out_ids.reshape(-1), ignore_index=pad_id,
+                                          reduction="sum").item()
+            log_smoothed_sum += loss.item() * valid
+            log_nll_sum += nll_sum
+            log_target_tokens += valid
+            accum_target_tokens += valid
+            tokens = int((src_ids.ne(pad_id).sum() + tgt_in_ids.ne(pad_id).sum()).item())
+            speed.update(tokens)
             micro_steps += 1
             if micro_steps % cfg.runtime.accumulate_steps:
                 continue
+            scaler.unscale_(opt)
+            for param in model.parameters():
+                if param.grad is not None:
+                    param.grad.div_(accum_target_tokens)
             if cfg.optim.grad_clip > 0:
-                scaler.unscale_(opt)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.optim.grad_clip)
             scaler.step(opt)
             scaler.update()
             opt.zero_grad(set_to_none=True)
             sched.step()
-
-            # 统计
-            tokens = int((src_ids.ne(pad_id).sum() + tgt_in_ids.ne(pad_id).sum()).item())
-            speed.update(tokens)
+            effective_target_tokens = accum_target_tokens
+            accum_target_tokens = 0
             global_step += 1
 
             if is_main_process() and global_step % cfg.runtime.log_every == 0:
                 lr = sched.get_last_lr()[0]
-                nll = F.cross_entropy(logits.detach().reshape(-1, logits.size(-1)),
-                                      tgt_out_ids.reshape(-1), ignore_index=pad_id).item()
+                mean_loss = log_smoothed_sum / log_target_tokens
+                nll = log_nll_sum / log_target_tokens
                 ppl = math.exp(min(80, nll))
-                tb.add_scalar("train/loss", loss.item(), global_step)
+                tb.add_scalar("train/loss", mean_loss, global_step)
                 tb.add_scalar("train/ppl", ppl, global_step)
                 tb.add_scalar("train/nll", nll, global_step)
                 tb.add_scalar("train/lr", lr, global_step)
                 tb.add_scalar("train/tokens_per_sec", speed.rate(), global_step)
-                recorder.record("train", global_step, loss=loss.item(), nll=nll,
-                                ppl=ppl, lr=lr, tokens_per_sec=speed.rate())
-                logger.info(f"step={global_step} loss={loss.item():.4f} nll={nll:.4f} ppl={ppl:.2f} lr={lr:.6f} tok/s={speed.rate():.0f}")
+                tb.add_scalar("train/target_tokens", log_target_tokens, global_step)
+                recorder.record("train", global_step, loss=mean_loss, nll=nll,
+                                ppl=ppl, lr=lr, tokens_per_sec=speed.rate(),
+                                target_tokens=log_target_tokens,
+                                target_tokens_last_update=effective_target_tokens)
+                logger.info(f"step={global_step} loss={mean_loss:.4f} nll={nll:.4f} ppl={ppl:.2f} lr={lr:.6f} tok/s={speed.rate():.0f}")
+                log_smoothed_sum = log_nll_sum = 0.0
+                log_target_tokens = 0
 
             # 保存与评估
             if is_main_process() and global_step % cfg.runtime.save_every == 0:
