@@ -68,6 +68,8 @@ def materialize(base: dict, experiment: Experiment, seed: int, output_dir: Path)
     # Existing legacy repo defaults to an extra final LayerNorm for compatibility.
     if experiment.category == "paper":
         cfg.setdefault("model", {})["final_norm"] = False
+        # Paper Eq. 2 has no inter-linear FFN dropout; only residual dropout.
+        cfg["model"]["ffn_inner_dropout"] = 0.0
     runtime = cfg.setdefault("runtime", {})
     runtime["seed"] = seed
     label = f"{experiment.name}-s{seed}"

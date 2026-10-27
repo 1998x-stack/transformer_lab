@@ -31,6 +31,7 @@ class ModelConfig:
     attention_kind: str = "scaled_dot"
     norm_style: Literal["pre", "post"] = "post"
     final_norm: bool = True
+    ffn_inner_dropout: Optional[float] = None
     dropout: float = 0.1
     attn_dropout: float = 0.0
     activation: Literal["relu", "gelu"] = "relu"

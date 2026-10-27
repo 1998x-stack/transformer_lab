@@ -47,6 +47,7 @@ def _transformer(cfg, vocab_size: int) -> Transformer:
         d_k=cfg.d_k, d_v=cfg.d_v,
         attention_scale=(cfg.attention_kind == "scaled_dot"),
         norm_style=cfg.norm_style, final_norm=cfg.final_norm,
+        ffn_inner_dropout=cfg.ffn_inner_dropout,
     )
 
 @OPTIMIZER_FACTORY.register("adam")

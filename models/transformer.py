@@ -120,10 +120,10 @@ class PositionwiseFFN(nn.Module):
 
 class EncoderLayer(nn.Module):
     def __init__(self, d_model, num_heads, d_ff, dropout, attn_dropout, activation,
-                 d_k=None, d_v=None, attention_scale=True, norm_style="post"):
+                 d_k=None, d_v=None, attention_scale=True, norm_style="post", ffn_inner_dropout=None):
         super().__init__()
         self.self_attn = MultiHeadAttention(d_model, num_heads, attn_dropout, d_k, d_v, attention_scale)
-        self.ffn = PositionwiseFFN(d_model, d_ff, dropout, activation)
+        self.ffn = PositionwiseFFN(d_model, d_ff, ffn_inner_dropout if ffn_inner_dropout is not None else dropout, activation)
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
         self.drop = nn.Dropout(dropout)
@@ -141,11 +141,11 @@ class EncoderLayer(nn.Module):
 
 class DecoderLayer(nn.Module):
     def __init__(self, d_model, num_heads, d_ff, dropout, attn_dropout, activation,
-                 d_k=None, d_v=None, attention_scale=True, norm_style="post"):
+                 d_k=None, d_v=None, attention_scale=True, norm_style="post", ffn_inner_dropout=None):
         super().__init__()
         self.self_attn = MultiHeadAttention(d_model, num_heads, attn_dropout, d_k, d_v, attention_scale)
         self.cross_attn = MultiHeadAttention(d_model, num_heads, attn_dropout, d_k, d_v, attention_scale)
-        self.ffn = PositionwiseFFN(d_model, d_ff, dropout, activation)
+        self.ffn = PositionwiseFFN(d_model, d_ff, ffn_inner_dropout if ffn_inner_dropout is not None else dropout, activation)
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
         self.norm3 = nn.LayerNorm(d_model)
@@ -187,6 +187,7 @@ class Transformer(nn.Module):
         attention_scale: bool = True,
         norm_style: str = "post",
         final_norm: bool = True,
+        ffn_inner_dropout: Optional[float] = None,
     ):
         super().__init__()
         if norm_style not in ("pre", "post"):
@@ -202,7 +203,7 @@ class Transformer(nn.Module):
             [
                 EncoderLayer(
                     d_model, num_heads, d_ff, dropout, attn_dropout, activation,
-                    d_k, d_v, attention_scale, norm_style
+                    d_k, d_v, attention_scale, norm_style, ffn_inner_dropout
                 )
                 for _ in range(N)
             ]
@@ -211,7 +212,7 @@ class Transformer(nn.Module):
             [
                 DecoderLayer(
                     d_model, num_heads, d_ff, dropout, attn_dropout, activation,
-                    d_k, d_v, attention_scale, norm_style
+                    d_k, d_v, attention_scale, norm_style, ffn_inner_dropout
                 )
                 for _ in range(N)
             ]
