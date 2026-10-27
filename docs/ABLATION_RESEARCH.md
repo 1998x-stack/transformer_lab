@@ -88,7 +88,7 @@ python decode.py --config configs/copy_en_en.yaml --ckpt work/checkpoints_en_en/
 
 ## 7. WMT14 原始数据的特殊风险
 
-Hugging Face 的 `wmt/wmt14` 数据卡提供的是 `de-en`、`fr-en` 等**规范化配置名**，并不是 `en-de` 或 `en-fr`。本分支将请求语言对按字母顺序转换为数据集配置（源/目标输出方向仍由 `filter_and_rename` 决定）。
+Hugging Face 的 `wmt/wmt14` 数据卡提供的是 `de-en`、`fr-en` 等**规范化配置名**，并不是 `en-de` 或 `en-fr`。本分支将请求语言对映射到官方配置（en↔de→de-en、en↔fr→fr-en）（源/目标输出方向仍由 `filter_and_rename` 决定）。
 
 数据卡亦提示 Common Crawl 语料存在非英文行混入、双语句对不对齐等问题。因此严格论文复现需额外锁定原始 WMT14 语料版本，进行双语比例、语言检测和异常对齐抽样审计，并报告数据清洗是否改变原论文训练集。参见 https://huggingface.co/datasets/wmt/wmt14 。
 

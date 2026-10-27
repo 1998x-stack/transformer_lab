@@ -33,8 +33,16 @@ def load_copy_corpus(
 
 def load_mt_dataset(dataset: str, lang_pair: str, cache_dir: str | None = None) -> DatasetDict:
     """Load translation dataset; try local path then web."""
-    # HF WMT14 configs are canonicalized, regardless of translation direction.
-    subset = "-".join(sorted(lang_pair.split("-")))
+    # WMT14 config names are dataset-specific, not alphabetic pair ordering.
+    # Source/target direction is preserved later in filter_and_rename().
+    wmt14_config = {
+        frozenset(("en", "de")): "de-en",
+        frozenset(("en", "fr")): "fr-en",
+    }
+    languages = frozenset(lang_pair.split("-"))
+    if dataset == "wmt14" and languages not in wmt14_config:
+        raise ValueError(f"Unsupported WMT14 language pair: {lang_pair}")
+    subset = wmt14_config[languages] if dataset == "wmt14" else lang_pair
     # 尝试本地 HF 缓存目录（若用户提前下载）
     local_hint = os.environ.get("HF_LOCAL_DATASET_DIR")
     if local_hint and os.path.isdir(local_hint):
