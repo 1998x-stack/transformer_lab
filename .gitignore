@@ -42,11 +42,12 @@ Thumbs.db
 # Jupyter
 .ipynb_checkpoints/
 
-# Local corpus / data
+# Local corpus / locally downloaded datasets (do not ignore source code in data/)
 sample_corpus.txt
-data/
-dataset/
-datasets/
+/data/local/
+/data/cache/
+/dataset/
+/datasets/
 
 # Training and experiment outputs
 work/
@@ -63,6 +64,7 @@ results/
 *.pt
 *.ckpt
 *.onnx
+*.safetensors
 *.pkl
 *.pickle
 *.h5
