@@ -15,6 +15,8 @@ class OptimConfig:
     warmup_steps: int = 4000
     max_steps: int = 100_000
     grad_clip: float = 1.0
+    optimizer: str = "adam"
+    scheduler: str = "noam"
 
 
 @dataclass(frozen=True)
@@ -23,12 +25,19 @@ class ModelConfig:
     d_model: int = 512
     d_ff: int = 2048
     num_heads: int = 8
+    architecture: str = "transformer"
+    d_k: Optional[int] = None
+    d_v: Optional[int] = None
+    attention_kind: str = "scaled_dot"
+    norm_style: Literal["pre", "post"] = "post"
+    final_norm: bool = True
+    ffn_inner_dropout: Optional[float] = None
     dropout: float = 0.1
     attn_dropout: float = 0.0
     activation: Literal["relu", "gelu"] = "relu"
     share_embeddings: bool = True
     tie_softmax_weight: bool = True
-    pos_encoding: Literal["sinusoidal", "learned"] = "sinusoidal"
+    pos_encoding: Literal["sinusoidal", "learned", "none"] = "sinusoidal"
     label_smoothing: float = 0.1
     vocab_size: int = 37000  # WMT14 En-De 默认约 37k
 
@@ -60,6 +69,7 @@ class RuntimeConfig:
     tb_dir: str = "work/tensorboard"
     save_every: int = 1000
     eval_every: int = 2000
+    log_every: int = 100
     keep_last: int = 10
     amp: bool = True
     accumulate_steps: int = 1

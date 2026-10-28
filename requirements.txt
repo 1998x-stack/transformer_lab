@@ -35,3 +35,6 @@ pydata-sphinx-theme>=0.15
 # Performance testing
 pytest-benchmark>=4.0
 memory-profiler>=0.61
+
+# Offline experiment plots
+matplotlib>=3.8

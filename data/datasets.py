@@ -33,7 +33,16 @@ def load_copy_corpus(
 
 def load_mt_dataset(dataset: str, lang_pair: str, cache_dir: str | None = None) -> DatasetDict:
     """Load translation dataset; try local path then web."""
-    subset = lang_pair.replace("-", "")
+    # WMT14 config names are dataset-specific, not alphabetic pair ordering.
+    # Source/target direction is preserved later in filter_and_rename().
+    wmt14_config = {
+        frozenset(("en", "de")): "de-en",
+        frozenset(("en", "fr")): "fr-en",
+    }
+    languages = frozenset(lang_pair.split("-"))
+    if dataset == "wmt14" and languages not in wmt14_config:
+        raise ValueError(f"Unsupported WMT14 language pair: {lang_pair}")
+    subset = wmt14_config[languages] if dataset == "wmt14" else lang_pair
     # 尝试本地 HF 缓存目录（若用户提前下载）
     local_hint = os.environ.get("HF_LOCAL_DATASET_DIR")
     if local_hint and os.path.isdir(local_hint):
@@ -42,11 +51,9 @@ def load_mt_dataset(dataset: str, lang_pair: str, cache_dir: str | None = None) 
         except Exception:
             pass
     # 公开数据集名称映射
-    name = dataset
-    if dataset == "wmt14":
-        # wmt14 en-de 在HF中名为 'wmt14' 配置 'de-en' 或 'en-fr' 等
-        pass
-    ddict = load_dataset(name, lang_pair, cache_dir=cache_dir)
+    name = "wmt/wmt14" if dataset == "wmt14" else dataset
+    config_name = subset if dataset == "wmt14" else lang_pair
+    ddict = load_dataset(name, config_name, cache_dir=cache_dir)
     return ddict
 
 def filter_and_rename(ddict: DatasetDict, src_lang: str, tgt_lang: str, min_len: int, max_src: int, max_tgt: int) -> DatasetDict:

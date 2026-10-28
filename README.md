@@ -56,3 +56,20 @@ bash scripts/run_copy_en_en.sh   # 安装依赖 → 训练 → 示例回声测�
 ## 📄 License
 
 MIT
+
+## 论文消融与 Factory Mode（独立研究分支）
+
+- 论文映射、原始数据口径、A–E 消融、验收：[`docs/ABLATION_RESEARCH.md`](docs/ABLATION_RESEARCH.md)
+- 组件注册模式与兼容性：[`docs/FACTORY_MODE.md`](docs/FACTORY_MODE.md)
+- 生成三种子实验配置（生成配置不代表实际运行）：
+
+```bash
+python -m research.ablations --base configs/base_en_de.yaml --out work/ablations --suite paper --seeds 42 43 44
+python -m research.ablations --base configs/copy_en_en.yaml --out work/copy_ablations --suite mechanism --seeds 42
+python train.py --config work/ablations/configs/B_dk_16-s42.yaml
+tensorboard --logdir work/ablations/tensorboard
+python -m research.visualize work/ablations/logs/*/* --output work/ablations/plots
+python -m pytest -q tests/test_factory_ablations.py
+```
+
+> 原论文 Table 3 BLEU/PPL 仅作对照，不是此仓库的新实测成绩；机器翻译需独立完成 WMT14 和标准 BLEU 评测。

@@ -56,11 +56,14 @@ def beam_search(model: Transformer, src_ids: torch.Tensor, src_pad_id: int,
                 for lp, idx in zip(topk_logprob.tolist(), topk_idx.tolist()):
                     new_tokens = h.tokens + [idx]
                     ended = (idx == eos_id)
-                    # 使用长度惩罚的归一化 logP
-                    norm = (h.logprob + lp) / length_penalty(len(new_tokens), alpha)
-                    all_candidates.append(BeamHypo(new_tokens, norm, ended))
+                    # Store *unnormalized* cumulative logP; normalize only
+                    # for ranking. Re-normalizing at each step corrupts scores.
+                    all_candidates.append(BeamHypo(new_tokens, h.logprob + lp, ended))
             # 取前 beam
-            all_candidates.sort(key=lambda x: x.logprob, reverse=True)
+            all_candidates.sort(
+                key=lambda x: x.logprob / length_penalty(len(x.tokens), alpha),
+                reverse=True,
+            )
             hypos = all_candidates[:beam]
             # 移动已完成句子
             still_alive = []
@@ -74,7 +77,8 @@ def beam_search(model: Transformer, src_ids: torch.Tensor, src_pad_id: int,
             if len(finished) >= beam:
                 break
 
-        best = (finished or hypos)[0]
+        best = max(finished or hypos,
+                   key=lambda x: x.logprob / length_penalty(len(x.tokens), alpha))
         # 去掉 BOS/EOS
         out = [tok for tok in best.tokens if tok not in (bos_id,)]
         if out and out[-1] == eos_id:

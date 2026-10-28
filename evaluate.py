@@ -8,7 +8,7 @@ from utils.logging_utils import setup_logging
 from utils.metrics import compute_bleu
 from utils.distributed import set_seed
 from utils.torch_utils import resolve_device
-from models.transformer import Transformer
+from models.factory import build_model
 from data.datasets import load_mt_dataset, filter_and_rename, load_copy_corpus
 from data.tokenization import train_or_load_spm
 from utils.decoding import beam_search
@@ -36,13 +36,7 @@ def main():
         ddict = filter_and_rename(ddict, src_lang, tgt_lang, cfg.data.min_len, cfg.data.max_src_len, cfg.data.max_tgt_len)
     tok = train_or_load_spm(ddict["train"], cfg.data.tokenizer_dir, cfg.data.vocab_size)
 
-    model = Transformer(
-        vocab_size=tok.vocab_size,
-        N=cfg.model.N, d_model=cfg.model.d_model, d_ff=cfg.model.d_ff, num_heads=cfg.model.num_heads,
-        dropout=cfg.model.dropout, attn_dropout=cfg.model.attn_dropout, activation=cfg.model.activation,
-        share_embeddings=cfg.model.share_embeddings, tie_softmax_weight=cfg.model.tie_softmax_weight,
-        pos_encoding=cfg.model.pos_encoding
-    ).to(device)
+    model = build_model(cfg.model, tok.vocab_size).to(device)
     state = torch.load(args.ckpt, map_location=device)
     model.load_state_dict(state["model"])
     model.eval()
