@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
-set -e
-python -u -m transformer_lab.train --config configs/base_en_de.yaml
-python -u -m transformer_lab.train --config configs/ablations/dff_1024.yaml
+# Backward-compatible entrypoint; use generated complete configs, not partial legacy YAML.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec bash scripts/run_paper_ablation.sh C_dff_1024 "$@"
