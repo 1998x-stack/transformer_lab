@@ -1,25 +1,18 @@
 #!/usr/bin/env bash
-# Train the base Transformer on Grimms' Fairy Tales (copy/echo task) and verify it echoes.
+# Copy/echo smoke demo. Requires local sample_corpus.txt; no automatic downloads.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-
 PY="${PYTHON:-python3}"
-
-echo ">> Installing dependencies (if needed)"
-"$PY" -m pip install -q -r requirements.txt
-
-echo ">> Training copy/echo model on sample_corpus.txt..."
+if [[ ! -f sample_corpus.txt ]]; then
+  echo "Missing sample_corpus.txt: create a UTF-8 file with one sentence per line." >&2
+  exit 2
+fi
 "$PY" train.py --config configs/copy_en_en.yaml
-
-echo ">> Echo demo (model reproduces input; cleanest on corpus-like sentences, approximate on novel phrasing)"
-examples=(
-  "Of all the ladies in the land,"
-  "Alas! alas! if thy mother knew it,"
-  "And took my bones that they might lie"
-)
-for s in "${examples[@]}"; do
-  echo "in : $s"
-  out=$("$PY" decode.py --config configs/copy_en_en.yaml --ckpt work/checkpoints_en_en/best.pt --src "$s")
-  echo "out: $out"
-  echo
-done
+CHECKPOINT="work/checkpoints_en_en/best.pt"
+if [[ ! -f "$CHECKPOINT" ]]; then
+  echo "No best.pt found: ensure training reached eval_every steps." >&2
+  exit 1
+fi
+"$PY" decode.py --config configs/copy_en_en.yaml \
+  --ckpt "$CHECKPOINT" \
+  --src "This is a test sentence."

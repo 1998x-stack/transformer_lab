@@ -1,90 +1,72 @@
-# TUTORIAL — Train on a local English corpus (copy/echo demo)
+# 本地 Copy/Echo 入门教程
 
-`transformer_lab` is, by default, a sequence-to-sequence **machine translation**
-workbench. But you feed it **any** plain-text corpus via an extra `copy` mode: the
-encoder and decoder both see the *same* sentence (`src == tgt`), so the model learns
-to **reproduce / echo** its input. This lets you demonstrate the full training →
-tokenize → decode → evaluate loop on a single file (`sample_corpus.txt`, Grimms'
-Fairy Tales) without needing parallel translation data.
+本教程用于验证 `transformer_lab` 的数据、Tokenizer、Transformer、训练、checkpoint、推理和 BLEU 评估闭环。**它不是 WMT14 机器翻译复现，也不具有论文 BLEU 对照意义。**
 
-## 1. Overview
+返回 [项目主页](../README.md) · [文档索引](README.md)
 
-- Data mode `dataset: "copy"` in `configs/copy_en_en.yaml`.
-- `data/corpus.py` reads the text file, drops blank lines / ALL-CAPS headings /
-  over-short or over-long lines, and makes `{"src": line, "tgt": line}` records.
-- A SentencePiece (BPE, shared vocab ~4k) tokenizer is built from the train split.
-- The compact demo model (N=2, d_model=128, d_ff=512, 4 heads) trains with the
-  Noam schedule and label smoothing 0.0 — fast enough (~10–20 min) on a laptop CPU.
-  Pipe to a base N=6/d_model=512 model on real hardware when you scale up.
-- Device is resolved at runtime (`cuda` → `mps` → `cpu`) with graceful fallback.
-  `runtime.device` in the YAML picks the backend; `configs/copy_en_en.yaml` uses
-  `cpu` because it is 3–4x faster than this machine's MPS for this model.
-  AMP is only used on CUDA.
+## 1. 先决条件
 
-## 2. Setup
+- Python 3.10+，建议 3.11；
+- 已从仓库根目录安装 `requirements.txt`；
+- 根目录存在用户提供的 `sample_corpus.txt`，UTF-8 编码，每行一条可读英文句子，包含足够不同样本用于 train/validation/test 切分。
+
+仓库通过 `.gitignore` 忽略 `sample_corpus.txt`，**不分发格林童话语料**。不要将历史示例文字误认为仓库里自带数据。
 
 ```bash
-python3 -m pip install -r requirements.txt   # torch, sentencepiece, datasets, sacrebleu, ...
+python -m pip install -r requirements.txt
+python -m pytest -q -o addopts='' tests/test_factory_ablations.py
 ```
 
-(Requires `torch>=2.2`, `datasets`, `sentencepiece`, `sacrebleu`, `loguru`,
-`tensorboard`, `tqdm`, `pyyaml`.)
+## 2. 训练
 
-## 3. Train
+`configs/copy_en_en.yaml` 使用 2 层 Encoder/Decoder、`d_model=128`、4 个头、BPE 词表大小 4000、`max_tokens_per_batch=1500`、默认 `max_steps=15000`。CPU/MPS/CUDA 的实际耗时不同，不保证固定时长。
 
 ```bash
-python3 train.py --config configs/copy_en_en.yaml
+python train.py --config configs/copy_en_en.yaml
 ```
 
-What happens:
-- `configs/copy_en_en.yaml` selects `dataset: copy` and `corpus_path: sample_corpus.txt`.
-- Tokenizer is trained to `work/tokenizer_en_en/spm_4000.model` (cached after the
-  first run).
-- Batches are built dynamically to ~20k tokens each.
-- Checkpoints: `work/checkpoints_en_en/step*.pt` and `work/checkpoints_en_en/best.pt`
-  (best validation loss).
-- Logs / tensorbboard under `work/logs_en_en` / `work/tb_en_en`.
+数据经 `data/corpus.py` 处理后构建 `src==tgt` 的示例，`data/datasets.py` 按种子切分数据；SentencePiece 词表保存在 `work/tokenizer_en_en/`。注意：修改语料或分词条件时必须重新审计缓存 tokenizer 的有效性。
 
-`max_steps` in the config bounds the run; 3000 steps with the compact model takes
-about 10–20 minutes on CPU and is enough to see the copy task converge toward low
-perplexity.
+预期输出路径（以 YAML 为准）：
 
-## 4. Test / echo
+- `work/checkpoints_en_en/best.pt`：按照验证样本 hard NLL 选择的最佳权重；
+- `work/checkpoints_en_en/step*.pt`：间隔保存的模型；
+- `work/logs_en_en/<run_id>/manifest.json`、`metrics.jsonl`：运行元数据和指标；
+- `work/tb_en_en/`：TensorBoard event 文件。
+
+如果语料量过少、词表训练失败或验证集合无有效 token，请先检查数据。不要将失败归因为模型性能。
+
+## 3. 解码与解释
 
 ```bash
-python3 decode.py --config configs/copy_en_en.yaml \
+python decode.py \
+  --config configs/copy_en_en.yaml \
   --ckpt work/checkpoints_en_en/best.pt \
-  --src "The king had a beautiful daughter with long golden hair."
+  --src "This is a sample sentence." \
+  --attention-dir work/attention
 ```
 
-The output should closely reproduce the input sentence (beam search, size 4,
-length penalty 0.6, plus a repeat penalty). With the compact laptop model, corpus-like
-sentences are echoed accurately; novel/unseen phrasing is reproduced only
-approximately (correct words, imperfect word order), which is the expected
-limitation of a small model trained briefly on CPU.
+输出文本应作为**定性检查**；不应保证未见过的句子可逐字复制。若设置 `--attention-dir`，代码在推理过程中捕获部分注意力模块的第一个头并绘制热力图，不代表完整多层多头行为分析。
 
-## 5. Evaluate (BLEU of reconstruction)
+## 4. 评估和曲线
 
 ```bash
-python3 evaluate.py --config configs/copy_en_en.yaml \
+python evaluate.py \
+  --config configs/copy_en_en.yaml \
   --ckpt work/checkpoints_en_en/best.pt --split test
+
+tensorboard --logdir work/tb_en_en
+
+# 使用实际 run_id 目录，而不是假定日志已经存在
+python -m research.visualize work/logs_en_en/* --output work/copy_plots
 ```
 
-This runs beam search on the held-out `test` split and reports sacreBLEU of the
-echo output vs. the original sentences (a “reconstruction” sanity metric).
+`evaluate.py` 在 copy/echo 数据上计算的是生成句对源句的 BLEU（重建任务 sanity metric），不是 WMT 翻译 BLEU。训练期的验证 PPL 来源于不平滑的 target NLL，仍属于抽样开发集评估，并非全测试集指标。
 
-## 6. One-command demo
+## 5. 常见问题
 
-```bash
-bash scripts/run_copy_en_en.sh
-```
-
-Installs deps (if needed), trains, then decodes three example sentences so you can
-see the echo behavior end-to-end.
-
-## 7. Still using the original MT tasks?
-
-Unchanged. `copy` is an **additive** dataset mode; the WMT configs
-(`configs/base_en_de.yaml`, `configs/big_en_fr.yaml`, …) still load parallel data
-from the Hugging Face hub exactly as before. Only the device handling became
-runtime-resolved and therefore safer on Macs.
+- **找不到 `sample_corpus.txt`**：需要用户自己准备；该文件不会自动从 GitHub 下载。
+- **`best.pt` 不存在**：首先检查 `runtime.eval_every` 是否小于或等于有效训练更新数，并检查数据是否足以通过验证。
+- **不同机器速度差异大**：CPU、CUDA、MPS 的算子与精度路径不同；请记录设备与 PyTorch 版本。
+- **训练与评估结果不同**：训练使用 teacher forcing，解码使用自回归 beam search；必须区分两种协议。
+- **要做论文消融**：不要从 copy/echo 的 BLEU 推导 WMT 性能；转到 [论文研究协议](ABLATION_RESEARCH.md)。
