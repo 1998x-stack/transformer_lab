@@ -18,5 +18,9 @@ jobs:
           python -m pip install "torch>=2.2" "pytest>=8" "pytest-cov>=4" "pyyaml>=6" "matplotlib>=3.8"
       - name: Syntax check
         run: python -m compileall -q models optim research utils train.py evaluate.py decode.py
+      - name: Repository documentation and shell entrypoint checks
+        run: |
+          python scripts/check_repo_docs.py
+          for script in scripts/*.sh; do bash -n "$script"; done
       - name: Factory and ablation contract tests
         run: python -m pytest -q -o addopts='' tests/test_factory_ablations.py

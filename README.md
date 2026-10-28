@@ -137,10 +137,14 @@ transformer_lab/
 
 关于实验控制变量、(d_k)/(d_v) 的区别、数据审计、BLEU/PPL 口径及复现验收，参见 [消融研究协议](docs/ABLATION_RESEARCH.md) 和 [Factory 架构文档](docs/FACTORY_MODE.md)。
 
-## 开发与验证
+## 脚本兼容层与开发验证
+
+`scripts/run_paper_ablation.sh` 以及 `scripts/ablation_*.sh` 是兼容入口：它们会先生成完整的论文消融配置，再执行所选训练。运行时将以所选 seed **重写** `work/ablations/plan.json`；批量实验应直接调用 `research.ablations` 并妥善保存每次计划。翻译预设脚本 `scripts/run_base_*.sh` / `scripts/run_big_*.sh` 会执行耗时训练、checkpoint 平均与测试集评估，**不会**作为安装或 CI 的默认步骤。
 
 ```bash
 python -m compileall -q models optim research utils train.py evaluate.py decode.py
+python scripts/check_repo_docs.py
+for script in scripts/*.sh; do bash -n "$script"; done
 python -m pytest -q -o addopts='' tests/test_factory_ablations.py
 # 完整套件（依赖与语料齐备时执行）
 python -m pytest -q

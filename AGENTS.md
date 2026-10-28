@@ -67,6 +67,8 @@ From the **repository root**:
 ```bash
 python -m pip install -r requirements.txt
 python -m compileall -q models optim research utils train.py evaluate.py decode.py
+python scripts/check_repo_docs.py
+for script in scripts/*.sh; do bash -n "$script"; done
 python -m pytest -q -o addopts='' tests/test_factory_ablations.py
 python -m pytest -q                     # broader suite; may need optional data/deps
 
